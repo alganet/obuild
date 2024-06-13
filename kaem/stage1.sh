@@ -982,17 +982,8 @@ else
     patch -Np0 -i /opt/kaem/binutils/new-gettext.patch
     patch -Np0 -i /opt/kaem/binutils/opcodes-ensure-i386-init-dependencies-are-satisfied.patch
 
-    
     export PREFIX=/
-    export LIBDIR=/lib
-
-    #sed -i 's/| \$NL2SP/| sort | $NL2SP/' ltmain.sh
-
-    rm -Rf /lib
-    rm -Rf /include
-    ln -s /opt/build/musl-1.1.24/lib /lib
-    ln -s /opt/build/musl-1.1.24/include /include
-
+    export LIBDIR=/opt/build/musl-1.1.24/lib
 
     for dir in intl libiberty opcodes bfd binutils gas gprof ld zlib; do
     (
@@ -1016,14 +1007,295 @@ else
     done
     
     make -C bfd headers
+
     for dir in libiberty zlib bfd opcodes binutils gas gprof ld; do
         make -C $dir tooldir=${PREFIX} CPPFLAGS="-DPLUGIN_LITTLE_ENDIAN" MAKEINFO=true
     done
-    
+
     for dir in libiberty zlib bfd opcodes binutils gas gprof ld; do
         make -C $dir tooldir=${PREFIX} DESTDIR="${DESTDIR}" install MAKEINFO=true
     done
 
     cd /opt/build/
-    #sha256sum -o binutils-2.30-0.answers ${BINDIR}/tcc-musl
+    sha256sum -o binutils-2.30.answers ${BINDIR}/as
+fi
+
+if sha256sum -c gcc-4.0.4.answers
+then
+    echo gcc already built
+else
+    set -x
+    gunzip -c /opt/build/gcc-core-4.0.4.tar.gz > /opt/build/gcc-core-4.0.4.tar
+    tar -xf /opt/build/gcc-core-4.0.4.tar
+    rm /opt/build/gcc-core-4.0.4.tar
+    cd /opt/build/gcc-4.0.4
+
+    cp -f /opt/kaem/config.guess .
+    cp -f /opt/kaem/config.sub .
+    
+    # This is needed for building with TCC
+    sed -i 's/ix86_attribute_table\[\]/ix86_attribute_table\[10\]/' gcc/config/i386/i386.c
+    # Needed for musl
+    sed -i 's/struct siginfo/siginfo_t/' gcc/config/i386/linux-unwind.h
+
+    #rm fixincludes/fixincl.x
+
+    mkdir -p build
+    cd build
+
+    export PREFIX=/
+    export LIBDIR=/opt/build/musl-1.1.24/lib
+
+    for dir in libiberty libcpp gcc; do
+        mkdir -p $dir
+        cd $dir
+        CC=tcc-musl CFLAGS="-D HAVE_ALLOCA_H" ../../$dir/configure \
+            --prefix="${PREFIX}" \
+            --libdir="${LIBDIR}" \
+            --build=i386-unknown-linux-musl \
+            --target=i386-unknown-linux-musl \
+            --host=i386-unknown-linux-musl \
+            --with-sysroot= \
+            --disable-shared
+        cd ..
+    done
+    cd ..
+
+
+    sed -i 's/C_alloca/alloca/g' libiberty/alloca.c
+    sed -i 's/C_alloca/alloca/g' include/libiberty.h
+
+    ln -s . build/build-i386-unknown-linux-musl
+    mkdir build/gcc/include
+    ln -s ../../../gcc/gsyslimits.h build/gcc/include/syslimits.h
+    
+    rm /opt/build/musl-1.1.24/lib/ldscripts
+    ln -s /lib/ldscripts /opt/build/musl-1.1.24/lib/ldscripts
+
+    export LIBGCC2_INCLUDES='-I"/opt/build/musl-1.1.24/include" -I"/include"'
+    export CPATH="/opt/build/musl-1.1.24/include"
+    export LIBRARY_PATH=-I"/opt/build/musl-1.1.24/lib"
+
+    for dir in libiberty libcpp gcc; do
+        make -C build/$dir STMP_FIXINC=
+    done
+
+    DESTDIR=
+    mkdir -p "${DESTDIR}${LIBDIR}/gcc/i386-unknown-linux-musl/4.0.4/install-tools/include"
+    make -C build/gcc install STMP_FIXINC= DESTDIR="${DESTDIR}"
+    mkdir -p "${DESTDIR}${LIBDIR}/gcc/i386-unknown-linux-musl/4.0.4/include"
+    rm "${DESTDIR}${LIBDIR}/gcc/i386-unknown-linux-musl/4.0.4/include/syslimits.h"
+    cp  gcc/gsyslimits.h "${DESTDIR}${LIBDIR}/gcc/i386-unknown-linux-musl/4.0.4/include/syslimits.h"
+
+    cd /opt/build/
+    sha256sum -o gcc-4.0.4.answers ${BINDIR}/i386-unknown-linux-musl-gcc
+fi
+
+
+if sha256sum -c m4-1.4.7.answers
+then
+    echo m4 already built
+else
+    set -x
+    unbz2 --file /opt/build/m4-1.4.7.tar.bz2 --output /opt/build/m4-1.4.7.tar
+    tar -xf /opt/build/m4-1.4.7.tar
+    rm /opt/build/m4-1.4.7.tar
+    cd /opt/build/m4-1.4.7
+    
+    cat <<'MAKEFILE6'
+# SPDX-FileCopyrightText: 2021 Andrius Štikonas <andrius@stikonas.eu>
+# SPDX-FileCopyrightText: 2022 fosslinux <fosslinux@aussies.space>
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+CC      = tcc-musl
+AR      = tcc-musl -ar
+
+CFLAGS  = -I lib \
+          -DVERSION=\"1.4.7\" \
+          -DPACKAGE_BUGREPORT=\"bug-m4@gnu.org\" \
+          -DPACKAGE_STRING=\"GNU\ M4\ 1.4.7\" \
+          -DPACKAGE=\"m4\" \
+          -DPACKAGE_NAME=\"GNU\ M4\" \
+          -DHAVE_STDINT_H=1 \
+          -DHAVE___FPENDING=1 \
+          -DHAVE_DECL___FPENDING=1 \
+          -D_GNU_SOURCE=1 \
+          -D_GL_UNUSED= \
+          -D__getopt_argv_const=const \
+          -DSYSCMD_SHELL=\"/bin/sh\"
+
+LDFLAGS = -L . -lm4
+
+.PHONY: all
+
+LIB_SRC = cloexec close-stream dup-safer error exitfail fd-safer fopen-safer getopt getopt1 mkstemp-safer regex obstack tmpfile-safer verror xalloc-die xasprintf xmalloc xvasprintf
+LIB_OBJECTS = $(addprefix lib/, $(addsuffix .o, $(LIB_SRC)))
+
+M4_SRC = m4 builtin debug eval format freeze input macro output path symtab
+M4_OBJ = $(addprefix src/, $(addsuffix .o, $(M4_SRC)))
+
+all: src/m4
+
+src/m4: libm4.a $(M4_OBJ)
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+libm4.a: $(LIB_OBJECTS)
+	$(AR) cr $@ $^
+
+%.o : %.c lib/config.h
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+lib/config.h:
+	touch lib/config.h
+
+install: all
+	install -D src/m4 $(DESTDIR)$(PREFIX)/bin/m4    
+MAKEFILE6
+
+    export PREFIX=/
+    export LIBDIR=/opt/build/musl-1.1.24/lib
+
+    cp -f /opt/kaem/config.guess .
+    cp -f /opt/kaem/config.sub .
+
+    CC=tcc-musl ./configure \
+        --prefix="${PREFIX}" \
+        --host=i386-unknown-linux-musl \
+        --build=i386-unknown-linux-gnu \
+        --libdir="${LIBDIR}" 
+
+    make MAKEINFO=true DESTDIR="${DESTDIR}"
+    make MAKEINFO=true DESTDIR="${DESTDIR}" install
+
+    cd /opt/build/
+    sha256sum -o m4-1.4.7.answers ${BINDIR}/m4
+fi
+
+if sha256sum -c gmp-6.2.1.answers
+then
+    echo gmp already built
+else
+    set -x
+    unbz2 --file /opt/build/gmp-6.2.1.tar.bz2 --output /opt/build/gmp-6.2.1.tar
+    tar -xf /opt/build/gmp-6.2.1.tar
+    rm /opt/build/gmp-6.2.1.tar
+    cd /opt/build/gmp-6.2.1
+
+    export PREFIX=/
+    export LIBDIR=/opt/build/musl-1.1.24/lib
+    export LIBGCC2_INCLUDES='-I"/opt/build/musl-1.1.24/include" -I"/include"'
+    export CPATH="/opt/build/musl-1.1.24/include:/include"
+    export LIBRARY_PATH="/opt/build/musl-1.1.24/lib"
+    export CC="i386-unknown-linux-musl-gcc"
+    export CPP="i386-unknown-linux-musl-cpp"
+
+    cp -f /opt/kaem/config.guess .
+    cp -f /opt/kaem/config.sub .
+    
+    ./configure \
+        --prefix="${PREFIX}" \
+        --libdir="${LIBDIR}" \
+        --host=i386-unknown-linux-musl \
+        --build=i386-unknown-linux-musl \
+        --disable-shared
+
+    make MAKEINFO=true DESTDIR="${DESTDIR}"
+    make MAKEINFO=true DESTDIR="${DESTDIR}" install
+
+    cd /opt/build/
+    sha256sum -o gmp-6.2.1.answers /include/gmp.h
+fi
+
+if sha256sum -c mpfr-4.1.0.answers
+then
+    echo mpfr already built
+else
+    set -x
+    gunzip -c /opt/build/mpfr-4.1.0.tar.gz > /opt/build/mpfr-4.1.0.tar
+    tar -xf /opt/build/mpfr-4.1.0.tar
+    rm /opt/build/mpfr-4.1.0.tar
+    cd /opt/build/mpfr-4.1.0
+
+    export PREFIX=/
+    export LIBDIR=/opt/build/musl-1.1.24/lib
+    export LIBGCC2_INCLUDES='-I"/opt/build/musl-1.1.24/include" -I"/include"'
+    export CPATH="/opt/build/musl-1.1.24/include:/include"
+    export LIBRARY_PATH="/opt/build/musl-1.1.24/lib"
+
+    cp -f /opt/kaem/config.guess .
+    cp -f /opt/kaem/config.sub .
+    
+    ./configure \
+        --prefix="${PREFIX}" \
+        --libdir="${LIBDIR}" \
+        --build=i386-unknown-linux-musl \
+        --host=i386-unknown-linux-musl \
+        --disable-shared
+
+    cat <<'MPARAM' > src/mparam.h
+/*
+SPDX-FileCopyrightText: 2005-2020 Free Software Foundation, Inc.
+SPDX-License-Identifier: GPL-3.0-or-later
+*/
+
+/* This file is truncated version of src/mparam.h
+*/
+
+#ifndef __MPFR_IMPL_H__
+# error "MPFR Internal not included"
+#endif
+
+#define MPFR_TUNE_CASE "default"
+
+/****************************************************************
+ * Default values of Threshold.                                 *
+ * Must be included in any case: it checks, for every constant, *
+ * if it has been defined, and it sets it to a default value if *
+ * it was not previously defined.                               *
+ ****************************************************************/
+#include "generic/mparam.h"
+MPARAM
+
+    make MAKEINFO=true DESTDIR="${DESTDIR}"
+    make MAKEINFO=true DESTDIR="${DESTDIR}" install
+
+    cd /opt/build/
+    sha256sum -o mpfr-4.1.0.answers /opt/build/musl-1.1.24/lib/pkgconfig/mpfr.pc
+fi
+
+
+if sha256sum -c mpc-1.2.1.answers
+then
+    echo mpc already built
+else
+    set -x
+    gunzip -c /opt/build/mpc-1.2.1.tar.gz > /opt/build/mpc-1.2.1.tar
+    tar -xf /opt/build/mpc-1.2.1.tar
+    rm /opt/build/mpc-1.2.1.tar
+    cd /opt/build/mpc-1.2.1
+
+    export PREFIX=/
+    export LIBDIR=/opt/build/musl-1.1.24/lib
+    export LIBGCC2_INCLUDES='-I"/opt/build/musl-1.1.24/include" -I"/include"'
+    export CPATH="/opt/build/musl-1.1.24/include:/include"
+    export LIBRARY_PATH="/opt/build/musl-1.1.24/lib"
+    export CC="i386-unknown-linux-musl-gcc"
+    export CPP="i386-unknown-linux-musl-cpp"
+
+    cp -f /opt/kaem/config.guess .
+    cp -f /opt/kaem/config.sub .
+    
+    ./configure \
+        --prefix="${PREFIX}" \
+        --libdir="${LIBDIR}" \
+        --host=i386-unknown-linux-musl \
+        --build=i386-unknown-linux-musl \
+        --disable-shared
+
+    make MAKEINFO=true DESTDIR="${DESTDIR}"
+    make MAKEINFO=true DESTDIR="${DESTDIR}" install
+
+    cd /opt/build/
+    sha256sum -o mpc-1.2.1.answers /opt/build/musl-1.1.24/lib/libmpc.a
 fi

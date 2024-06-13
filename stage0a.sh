@@ -42,6 +42,11 @@ m "mirrors.kernel.org/gnu/grep/grep-2.4.tar.gz"
 m "mirrors.kernel.org/gnu/gawk/gawk-3.0.4.tar.gz"
 m "mirrors.kernel.org/gnu/coreutils/coreutils-6.10.tar.lzma"
 m "mirrors.kernel.org/gnu/diffutils/diffutils-2.7.tar.gz"
+m "mirrors.kernel.org/gnu/gcc/gcc-4.0.4/gcc-core-4.0.4.tar.gz"
+m "mirrors.kernel.org/gnu/mpfr/mpfr-4.1.0.tar.gz"
+m "mirrors.kernel.org/gnu/gmp/gmp-6.2.1.tar.bz2"
+m "mirrors.kernel.org/gnu/m4/m4-1.4.7.tar.bz2"
+m "mirrors.kernel.org/gnu/mpc/mpc-1.2.1.tar.gz"
 
 #m "github.com/oriansj/stage0-posix/releases/download/Release_1.6.0/stage0-posix-1.6.0.tar.gz"
 # if ! test -d stage0-posix
@@ -120,8 +125,6 @@ cd ../target
 
 ./bin/cp ../kaem/gzip/makecrc-write-to-file.patch ./opt/kaem/gzip/
 ./bin/cp ../kaem/gzip/removecrc.patch ./opt/kaem/gzip/
-
-
 
 exec ./bin/wrap ./bin/kaem --verbose --init-mode --warn --strict --file kaem.run
 
