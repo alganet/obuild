@@ -1069,7 +1069,7 @@ else
     mkdir build/gcc/include
     ln -s ../../../gcc/gsyslimits.h build/gcc/include/syslimits.h
     
-    rm /opt/build/musl-1.1.24/lib/ldscripts
+    rm -f /opt/build/musl-1.1.24/lib/ldscripts
     ln -s /lib/ldscripts /opt/build/musl-1.1.24/lib/ldscripts
 
     export LIBGCC2_INCLUDES='-I"/opt/build/musl-1.1.24/include" -I"/include"'
